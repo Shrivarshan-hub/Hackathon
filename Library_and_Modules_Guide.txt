@@ -1,0 +1,130 @@
+SheThrive: Library and Module Usage Guide
+=============================================
+This document provides a comprehensive breakdown of every major library, module, and dependency installed in this project, explaining *why* it was chosen and exactly *how* it functions within the codebase.
+
+---------------------------------------------
+1. CORE BACKEND & SERVER LIBRARIES
+---------------------------------------------
+express (v4.21.2)
+- Why: It is the standard, minimalist web framework for Node.js.
+- How it functions: In `server.ts`, it essentially acts as the backbone of the application. It listens on port 3000, handles incoming HTTP requests, serves the `/api/*` endpoints (like `/api/auth/login` and `/api/chat/generate`), and serves the Vite React frontend simultaneously via `app.use(vite.middlewares)`.
+
+better-sqlite3 (v12.4.1)
+- Why: It provides an incredibly fast, synchronous SQLite3 interface for Node.js without requiring a heavy, external database server like Postgres to be installed locally.
+- How it functions: Used in `server.ts` to create the local `shethrive.db` file. It executes native SQL commands via `.prepare()` and `.run()` to persistently store User Profiles, Chat histories, and Message histories.
+
+express-rate-limit (v8.3.0)
+- Why: Essential for security, specifically preventing brute-force attacks.
+- How it functions: Attached to the `/api/auth/login` route in `server.ts`. It intelligently tracks IP addresses and blocks them if they attempt to login more than 10 times within a 15-minute window (`windowMs: 15 * 60 * 1000`).
+
+cookie-parser (v1.4.7)
+- Why: Native Express cannot read properties inside HTTP headers easily.
+- How it functions: Middleware that parses the `Cookie` header on incoming requests and populates `req.cookies`. This is how `server.ts` is able to extract the authentication token (`req.cookies.token`) on protected routes like `/api/chats`.
+
+dotenv (v17.2.3)
+- Why: Secrets like API keys and database passwords should never be hardcoded into source files. 
+- How it functions: Called at the very top of `server.ts` via `dotenv.config()`. It reads your `.env` file and loads the variables (like `GEMINI_API_KEY`) safely into Node's `process.env` global object.
+
+tsx (v4.21.0)
+- Why: Node.js natively runs JavaScript, meaning TypeScript files usually need to be compiled (`tsc`) before running. This is slow in development.
+- How it functions: Defined in the `package.json` scripts (`"dev": "tsx server.ts"`). It allows Node to execute the `server.ts` file immediately by compiling the Typescript in-memory on the fly.
+
+pg (v8.20.0)
+- Why: This is a Postgres database driver. 
+- How it functions: Currently, the app uses `better-sqlite3` locally, but `pg` is included in the package as the production database driver for when the application is deployed to a hosting service like Render or Heroku.
+
+
+---------------------------------------------
+2. SECURITY & AUTHENTICATION 
+---------------------------------------------
+bcrypt (v6.0.0)
+- Why: Storing passwords in plain-text is a massive security failure. 
+- How it functions: When a user signs up, the backend uses `bcrypt.hash(password, SALT_ROUNDS)` to irreversibly scramble their password into a cryptographic hash. When logging in, `bcrypt.compare()` mathematically tests if the entered password matches the stored hash.
+
+jsonwebtoken (v9.0.3)
+- Why: The app needs a secure way to "remember" that a user is logged in as they navigate between pages, without asking for their password on every click.
+- How it functions: Upon a successful login, `server.ts` generates a JWT containing the user's `userId` and signs it using a secret (`JWT_SECRET`). It is then sent to the React frontend as an HTTP-only cookie. On subsequent requests, the `authMiddleware` verifies the token's validity using `jwt.verify()`.
+
+
+---------------------------------------------
+3. FRONTEND FRAMEWORK & ROUTING
+---------------------------------------------
+react (v19.0.0) & react-dom (v19.0.0)
+- Why: React allows for building complex web interfaces through modular, reusable "components" (like logic that drives the chat interface, buttons, and layouts). 
+- How it functions: Used across all files in the `/src` directory. Uses hooks like `useState` to track input fields and `useEffect` to fetch data when a page loads.
+
+react-router-dom (v7.13.1)
+- Why: Single Page Applications (SPAs) don't naturally have "pages". You need a tool to manage URLs and back-button navigation without making the browser reload entirely.
+- How it functions: Found in `App.tsx`. Uses `<BrowserRouter>` and `<Routes>` to map components to specific paths. For example, when you visit `/signup`, it intercepts the browser, avoids refreshing the HTML, and logically renders the `<SignupPage />` component.
+
+vite (v6.2.0)
+- Why: Webpack (the old standard) is slow. Vite compiles frontend code insanely fast by taking advantage of native ES modules in browsers.
+- How it functions: Set up via `vite.config.ts`. In development mode, `server.ts` literally imports Vite using `createViteServer` and uses it as middleware to intercept frontend requests and inject Hot Module Replacement (HMR) directly into the Express server.
+
+@vitejs/plugin-react
+- Why: Vite needs to know how to specifically compile React's JSX syntax into plain JavaScript.
+- How it functions: Inserted into the plugins array in `vite.config.ts`.
+
+
+---------------------------------------------
+4. STYLING, UI, & ANIMATION
+---------------------------------------------
+tailwindcss (v4.1.14) & @tailwindcss/vite 
+- Why: Writing raw CSS files is difficult to maintain. Tailwind allows styling via purely utilitarian class names directly in the HTML/JSX.
+- How it functions: It scans all the `.tsx` files in `/src`, identifies the classes used (e.g., `flex`, `p-4`, `bg-black/40`), and seamlessly builds exactly the CSS required to style everything (injected into `index.css`).
+
+motion (v12.23.24) (Framer Motion)
+- Why: CSS animations are notoriously hard to orchestrate, especially for interactive elements entering and exiting the screen. 
+- How it functions: Used as `<motion.div>` in `SignupPage.tsx` and `LoginPage.tsx`. It accepts props like `initial={{ opacity: 0, y: 20 }}` and `animate={{ opacity: 1, y: 0 }}` to create extremely smooth, spring-based sliding animations when the user loads the page.
+
+lucide-react (v0.546.0)
+- Why: Open-source, clean, SVG-based icons that match modern application aesthetics.
+- How it functions: You import components like `<Sun />`, `<Moon />`, or `<UserCheck />` directly into JSX, which automatically renders scalable vector icons without needing to load external fonts.
+
+
+---------------------------------------------
+5. ARTIFICIAL INTELLIGENCE
+---------------------------------------------
+Fetch API / Google Gemini Integration
+- Why: The app uses `generativelanguage.googleapis.com` to power the AI logic.
+- How it functions: Though `@google/genai` is in the package file, the application relies on the native `fetch` API inside `server.ts` (`sendMessage()`) to dynamically pass a complex payload structure straight to Google's REST API, falling back over an array of different model versions (`gemini-2.5-flash`, `gemini-1.5-flash-latest`) to secure an AI response based dynamically on the `SYSTEM_INSTRUCTIONS`.
+
+
+---------------------------------------------
+6. PRESENTATION SCRIPT & EXPLANATION GUIDE
+---------------------------------------------
+This section is a detailed, conversational breakdown of your project's technology stack. You can use this exactly as a script or reference guide if you are explaining the app to a judge, an interviewer, or another developer!
+
+### 1. The Core Infrastructure (How it all connects)
+> "We built this as a Monolithic Application. That means instead of having a completely separate frontend and backend running on different ports, we tied them together for simplicity and speed."
+
+* Express (Our Backend Server): This is the brain of our operation. We used Express because it's the industry standard for creating fast web servers in Node.js. It listens on port 3000, handles all our API pathways (like /api/auth/login), and safely processes all the data before anything touches our database.
+* Vite (Our Frontend Engine): Usually, Vite runs its own separate server (on port 5173). But we did something clever: we embedded Vite *inside* our Express server as "middleware." This means our Express server actually delivers the React frontend to the user and handles the backend logic simultaneously. This makes deployment incredibly easy.
+* TSX: Normally, Node.js cannot read TypeScript, so you have to constantly compile your code into JavaScript before running it. We used tsx in our run scripts so we can execute our server.ts file instantly without waiting.
+
+### 2. The Database (Where the data lives)
+> "For the hackathon/prototype phase, we wanted something lightning-fast that didn't require complicated cloud setups, so we went with a local SQLite database."
+
+* Better-SQLite3: Instead of setting up a heavy Postgres or MySQL server, we used better-sqlite3. It creates a physical file (shethrive.db) right in our project folder. It's incredibly fast because it's synchronous, and we use it to securely store User Profiles, their Chat logs, and every Message they send safely.
+
+### 3. Security & Authentication (How we keep users safe)
+> "Security is critical, especially when dealing with career and salary data. We built a custom, secure authentication flow."
+
+* Bcrypt: When a user creates an account, we never save their actual password. We use bcrypt to scramble it into a cryptographic hash. If someone hacked our database, they'd just see random characters. When users log in, bcrypt mathematically verifies the password without un-scrambling the saved hash.
+* JSON Web Tokens (JWT) & Cookie-Parser: Once a user successfully logs in, how does the app *remember* them when they change pages? Our server creates a JWT (a digital ID card) and sends it to the user's browser as a secure, HTTP-only Cookie. cookie-parser is the tool that lets our Express server read that cookie on future requests to verify if the user is allowed to view things like their private chat history.
+* Express-Rate-Limit: We added a security guard to our login page. If someone (or a bot) tries to guess a password 10 times in 15 minutes, this library automatically freezes them out, preventing brute-force attacks.
+
+### 4. The Frontend (What the user sees)
+> "We focused on creating a premium, modern, and highly interactive user experience."
+
+* React: We used React to build our user interface because it lets us break complex pages down into reusable "components." For example, our Sidebar, Chat bubbles, and Input fields are all individual React elements.
+* React-Router-DOM: Because we built a Single Page Application (SPA), the browser never actually refreshes when you click a link (like going from the Dashboard to the Profile). React-Router intercepts that click, changes the URL, and instantly swaps out the React components on the screen.
+* Tailwind CSS: Instead of writing thousands of lines of custom CSS, we used Tailwind. It lets us style elements directly in the code (like writing `bg-black round-xl flex`) to instantly create our dark-mode, glassmorphic UI.
+* Motion (Framer Motion): To make the app feel expensive and smooth, we used Framer Motion. This is what powers the beautiful sliding animations when you first open the login or signup pages.
+* Lucide-React: We used this library for all our icons (like the sun/moon icon or the user avatars) because they are crisp, scalable vector graphics that don't slow down the site.
+
+### 5. The Artificial Intelligence (The "SheThrive" Brain)
+> "The core of our app is an intelligent fallback system connected directly to Google's LLMs."
+
+* Google Gemini API (via native fetch): Instead of using a bulky third-party SDK, we built a custom connection to Google's API natively. We send the user's chat history directly to models like gemini-2.5-flash or gemini-2.0-flash. 
+* Dynamic Personas: What makes our app special is how we use the API. Before sending the user's message to Gemini, our Express server injects an invisible SYSTEM_INSTRUCTION into the prompt based on what page the user is on. If they are on the Negotiation Practice page, the AI is secretly ordered to act like a slightly resistant Hiring Manager. If they are in the Ai Chat, it acts perfectly like an encouraging Career Coach!
